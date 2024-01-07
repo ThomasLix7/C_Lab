@@ -66,13 +66,17 @@ public:
 			// For each column, calculate the projected ray angle into world space
 			float fRayAngle = (fPlayerA - fFOV / 2.0f) + ((float)x / (float)ScreenWidth()) * fFOV;
 
-			float fDistanceToWall = 0;
-			bool bHitWall = false;
+			float fStepSize = 0.01f;
+			float fDistanceToWall = 0.0f;
 
+			bool bHitWall = false;
 			bool bBoundary = false;
 
 			float fEyeX = sinf(fRayAngle); // Unit vector for ray in player space
 			float fEyeY = cosf(fRayAngle);
+
+			float fSampleX = 0.0f;
+			float fSampleY = 0.0f;
 
 			while (!bHitWall && fDistanceToWall < fDepth) {
 
@@ -92,25 +96,26 @@ public:
 					if (map[nTestY * nMapWidth + nTestX] == '#') {
 						bHitWall = true;
 
-						vector<pair<float, float>> p; // distance, dot
+						//Determine where ray has hit wall. Break Block boundary
+						float fBlockMidX = (float)nTestX + 0.5f;
+						float fBlockMidY = (float)nTestY + 0.5f;
 
-						for (int tx = 0; tx < 2; tx++) {
-							for (int ty = 0; ty < 2; ty++) {
-								float vy = (float)nTestY + ty - fPlayerY;
-								float vx = (float)nTestX + tx - fPlayerX;
-								float d = sqrt(vx * vx + vy * vy);
-								float dot = (fEyeX * vx / d) + (fEyeY * vy / d);
-								p.push_back(make_pair(d, dot));
-							}
+						float fTestPointX = fPlayerX + fEyeX * fDistanceToWall;
+						float fTestPointY = fPlayerY + fEyeY * fDistanceToWall;
 
-							// Sort Pairs from closest to farthest
-							sort(p.begin(), p.end(), [](const pair<float, float>& left, const pair<float, float>& right) {return left.first < right.first; });
+						float fTestAngle = atan2f((fTestPointY - fBlockMidY), (fTestPointX - fBlockMidX));
 
-							float fBound = 0.01;
-							if (acos(p.at(0).second) < fBound) bBoundary = true;
-							if (acos(p.at(1).second) < fBound) bBoundary = true;
-							//if (acos(p.at(2).second) < fBound) bBoundary = true;
-						}
+						if (fTestAngle >= -3.14159f * 0.25f && fTestAngle < 3.14159f * 0.25f)
+							fSampleX = fTestPointY - (float)nTestY;
+
+						if (fTestAngle >= 3.14159f * 0.25f && fTestAngle < 3.14159f * 0.75f)
+							fSampleX = fTestPointX - (float)nTestX;
+
+						if (fTestAngle >= -3.14159f * 0.25f && fTestAngle < -3.14159f * 0.75f)
+							fSampleX = fTestPointX - (float)nTestX;
+
+						if (fTestAngle >= 3.14159f * 0.75f || fTestAngle < -3.14159f * 0.75f)
+							fSampleX = fTestPointY - (float)nTestY;
 					}
 				}
 			}
@@ -119,29 +124,21 @@ public:
 			int nCeiling = (float)(ScreenHeight() / 2.0) - ScreenHeight() / ((float)fDistanceToWall);
 			int nFloor = ScreenHeight() - nCeiling;
 
-			short nShade = ' ';
-
-			if (fDistanceToWall <= fDepth / 4.0f)     nShade = 0x2588;    // very close
-			else if (fDistanceToWall < fDepth / 3.0f) nShade = 0x2593;
-			else if (fDistanceToWall < fDepth / 2.0f) nShade = 0x2592;
-			else if (fDistanceToWall < fDepth)        nShade = 0x2591;
-			else                                      nShade = ' ';
-
-			if (bBoundary)              nShade = ' '; // Black it out
 
 			for (int y = 0; y < ScreenHeight(); y++) {
 				if (y < nCeiling)
 					Draw(x, y, L' ');
-				else if (y > nCeiling && y <= nFloor)
-					Draw(x, y, nShade);
+				else if (y > nCeiling && y <= nFloor) {
+					if (fDistanceToWall < fDepth) {
+						float fSampleY = ((float)y - (float)nCeiling / (float)nFloor - (float)nCeiling);
+						//Draw(x, y, spriteWall->SampleGlyph(fSampleX, fSampleY), spriteWall->SampleColour(fSampleX, fSampleY));
+					}
+					else
+						Draw(x, y, PIXEL_SOLID, 0);
+					
+				}
 				else {
-					float b = 1.0f - (((float)y - ScreenHeight() / 2.0f) / ((float)ScreenHeight() / 2.0f));
-					if (b < 0.25)        nShade = '#';
-					else if (b < 0.5)    nShade = 'X';
-					else if (b < 0.75)   nShade = '.';
-					else if (b < 0.9)    nShade = '-';
-					else if (b < 1.0)    nShade = ' ';
-					Draw(x, y, nShade);
+					Draw(x, y, PIXEL_SOLID, FG_DARK_GREEN);
 				}
 			}
 		}
